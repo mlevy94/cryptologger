@@ -98,7 +98,8 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--simple", action="store_true", help="Get just the price of each pairing")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="[%(asctime)s][%(levelname)s][%(name)-9s] %(message)s ")
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s][%(levelname)s][%(name)-9s] %(message)s",
+                        datefmt="%m-%d %H:%M:%S")
     logger = logging.getLogger("Main")
 
     logger.info(textwrap.dedent("""
@@ -127,6 +128,8 @@ if __name__ == '__main__':
         datapoints = []
         for fromsym, topoints in results.items():
             for tosym, pricedata in topoints.items():
+                if fromsym == tosym:
+                    continue
                 if args.simple:
                     pricedata = {"FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": pricedata, "MARKET": args.exchange}
                 datapoints.append(influx.make_price_pair(pricedata))
