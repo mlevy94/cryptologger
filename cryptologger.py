@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from time import sleep
 from argparse import ArgumentParser
 import requests
