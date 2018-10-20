@@ -207,7 +207,7 @@ if __name__ == '__main__':
             host=args.host, port=args.port, database=args.database,
             interval="Single" if args.single else "Historic" if args.historic else "{} Seconds".format(args.interval),
             fromsyms=args.from_symbols, tosyms=args.to_symbols,
-            exchange=args.exchange, data="Price Only" if args.simple or args.histroic else "Full"
+            exchange=args.exchange, data="Price Only" if args.simple or args.historic else "Full"
     )))
 
     influx = InfluxDB(args.database, args.host, args.port)
