@@ -207,7 +207,7 @@ if __name__ == '__main__':
             host=args.host, port=args.port, database=args.database,
             interval="Single" if args.single else "Historic" if args.historic else "{} Seconds".format(args.interval),
             fromsyms=args.from_symbols, tosyms=args.to_symbols,
-            exchange=args.exchange, data="Price Only" if args.simple else "Full"
+            exchange=args.exchange, data="Price Only" if args.simple or args.histroic else "Full"
     )))
 
     influx = InfluxDB(args.database, args.host, args.port)
@@ -222,10 +222,15 @@ if __name__ == '__main__':
             influx.post_data(datapoints)
     else:
         while True:
-            if args.simple:
-                results = Requester.multi_price(args.from_symbols, args.to_symbols, args.exchange)
-            else:
-                results = Requester.multi_price_full(args.from_symbols, args.to_symbols, args.exchange)
+            try:
+                if args.simple:
+                    results = Requester.multi_price(args.from_symbols, args.to_symbols, args.exchange)
+                else:
+                    results = Requester.multi_price_full(args.from_symbols, args.to_symbols, args.exchange)
+            except ConnectionError:
+                logger.warning("Failed Fetching Data")
+                sleep(args.interval)
+                continue
 
             datapoints = []
             for fromsym, topoints in results.items():
