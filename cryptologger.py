@@ -54,7 +54,10 @@ class Requester:
         }
         cls.logger.info("Simple: {} -> {}".format(from_currencies, to_currencies))
         result = requests.get(cls.CC_DATA_API.format("pricemulti"), params=payload)
-        return result.json()
+        response = result.json()
+        if response["Response"] == "Error":
+            raise ValueError(response["Message"])
+        return response
 
     @classmethod
     def multi_price_full(cls, from_currencies, to_currencies, exchange=None):
@@ -66,7 +69,10 @@ class Requester:
         }
         cls.logger.info("Full: {} -> {}".format(from_currencies, to_currencies))
         result = requests.get(cls.CC_DATA_API.format("pricemultifull"), params=payload)
-        return result.json().get("RAW", {})
+        response = result.json()
+        if response["Response"] == "Error":
+            raise ValueError(response["Message"])
+        return response.get("RAW", {})
 
     @classmethod
     def history_minute(cls, from_currencies, to_currencies, exchange=None, from_time=0):
@@ -228,22 +234,24 @@ if __name__ == '__main__':
                 else:
                     results = Requester.multi_price_full(args.from_symbols, args.to_symbols, args.exchange)
             except ConnectionError:
+                results = {}
                 logger.warning("Failed Fetching Data")
-                cycle.check()
-                continue
+            except ValueError as error:
+                results = {}
+                logger.warning("Bad Request: {}".format(error))
+            if results:
+                datapoints = []
+                for fromsym, topoints in results.items():
+                    for tosym, pricedata in topoints.items():
+                        if fromsym == tosym:
+                            continue
+                        if args.simple:
+                            pricedata = {
+                                "FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": pricedata, "MARKET": args.exchange
+                            }
+                        datapoints.append(influx.make_price_pair(pricedata))
 
-            datapoints = []
-            for fromsym, topoints in results.items():
-                for tosym, pricedata in topoints.items():
-                    if fromsym == tosym:
-                        continue
-                    if args.simple:
-                        pricedata = {
-                            "FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": pricedata, "MARKET": args.exchange
-                        }
-                    datapoints.append(influx.make_price_pair(pricedata))
-
-            influx.post_data(datapoints)
+                influx.post_data(datapoints)
             if args.single:
                 break
             cycle.check()
