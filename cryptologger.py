@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from time import sleep
 from argparse import ArgumentParser
 import requests
 import logging
@@ -22,15 +21,15 @@ class Limiter:
             self.time = curr_time
             self.count = 0
             self.logger.info("Reset")
-        else:
-            self.count += 1
-            self.logger.info("Count: {}".format(self.count))
-        if self.count > self.limit:
+        elif self.count >= self.limit:
             delay = self.interval - (curr_time - self.time)
             self.logger.info("Delay: {}".format(delay))
             time.sleep(delay)
             self.time = time.time()
             self.count = 0
+        else:
+            self.count += 1
+            self.logger.info("Count: {}".format(self.count))
 
 
 class Requester:
@@ -221,6 +220,7 @@ if __name__ == '__main__':
                 datapoints.append(influx.make_price_pair(pricedata, value["time"]))
             influx.post_data(datapoints)
     else:
+        cycle = Limiter(args.interval, 0)
         while True:
             try:
                 if args.simple:
@@ -229,7 +229,7 @@ if __name__ == '__main__':
                     results = Requester.multi_price_full(args.from_symbols, args.to_symbols, args.exchange)
             except ConnectionError:
                 logger.warning("Failed Fetching Data")
-                sleep(args.interval)
+                cycle.check()
                 continue
 
             datapoints = []
@@ -246,4 +246,4 @@ if __name__ == '__main__':
             influx.post_data(datapoints)
             if args.single:
                 break
-            sleep(args.interval)
+            cycle.check()
