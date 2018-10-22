@@ -55,7 +55,7 @@ class Requester:
         cls.logger.info("Simple: {} -> {}".format(from_currencies, to_currencies))
         result = requests.get(cls.CC_DATA_API.format("pricemulti"), params=payload)
         response = result.json()
-        if response["Response"] == "Error":
+        if response.get("Response") == "Error":
             raise ValueError(response["Message"])
         return response
 
@@ -70,7 +70,7 @@ class Requester:
         cls.logger.info("Full: {} -> {}".format(from_currencies, to_currencies))
         result = requests.get(cls.CC_DATA_API.format("pricemultifull"), params=payload)
         response = result.json()
-        if response["Response"] == "Error":
+        if response.get("Response") == "Error":
             raise ValueError(response["Message"])
         return response.get("RAW", {})
 
@@ -114,7 +114,7 @@ class Requester:
         cls.logger.info("History: {} -> {} ({})".format(from_currency, to_currency, to_time))
         result = requests.get(cls.CC_DATA_API.format("histominute"), params=payload)
         response = result.json()
-        if response["Response"] == "Error":
+        if response.get("Response") == "Error":
             raise ValueError(response["Message"])
         return response["Data"]
 
