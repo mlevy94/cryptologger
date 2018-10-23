@@ -233,7 +233,7 @@ if __name__ == '__main__':
                     results = Requester.multi_price(args.from_symbols, args.to_symbols, args.exchange)
                 else:
                     results = Requester.multi_price_full(args.from_symbols, args.to_symbols, args.exchange)
-            except ConnectionError:
+            except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
                 results = {}
                 logger.warning("Failed Fetching Data")
             except ValueError as error:
