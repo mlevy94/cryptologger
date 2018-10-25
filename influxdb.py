@@ -1,5 +1,7 @@
+import asyncio
 import requests
 import logging
+import time
 
 
 class InfluxDB:
@@ -29,7 +31,7 @@ class InfluxDB:
         tagstring = ",".join("{}={}".format(key, val) for key, val in tags.items())
         fieldstring = ",".join(map(cls._format_fields, fields.items()))
         if point_time is None:
-            point_time = ""
+            point_time = time.time_ns()
         else:
             point_time = point_time * 1000000000
         return "{},{} {} {}".format(fromsym, tagstring, fieldstring, point_time)
@@ -43,12 +45,12 @@ class InfluxDB:
             val = str(val)
         return "{}={}".format(key, val)
 
-    def post_data(self, data):
-        if len(data) <= self.MAX_POST:
-            self._post_data(data)
-        else:
-            for i in range(0, len(data), self.MAX_POST):
-                self._post_data(data[i:i + self.MAX_POST])
+    async def post_data(self, data):
+        loop = asyncio.get_event_loop()
+        futures = []
+        for i in range(0, len(data), self.MAX_POST):
+            await loop.run_in_executor(None, self._post_data, data[i:i + self.MAX_POST])
+        await asyncio.gather(*futures)
 
     def _post_data(self, data):
         self.logger.info("Sending {} Data Points".format(len(data)))
