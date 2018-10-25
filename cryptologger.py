@@ -33,18 +33,15 @@ async def main(args):
 
     if args.historic:
         loop = asyncio.get_running_loop()
-        data = crypto.history_minute(args.from_symbols, args.to_symbols, exchange=args.exchange)
 
-        # async def process_data(fromsym, tosym, values):
-
-        futures = []
-        async for fromsym, tosym, values in data:
+        async def process_data(fromsym, tosym, values):
             datapoints = []
             for value in values:
                 pricedata = {"FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": value["close"], "MARKET": args.exchange}
                 datapoints.append(influx.make_price_pair(pricedata, value["time"]))
-            futures.append(asyncio.ensure_future(influx.post_data(datapoints), loop=loop))
-        await asyncio.gather(*futures)
+            await asyncio.ensure_future(influx.post_data(datapoints), loop=loop)
+
+        await crypto.history_minute(process_data, args.from_symbols, args.to_symbols, exchange=args.exchange)
 
     else:
         cycle = Limiter(args.interval, 0)
@@ -69,7 +66,7 @@ async def main(args):
                             }
                         datapoints.append(influx.make_price_pair(pricedata))
 
-                influx.post_data(datapoints)
+                await influx.post_data(datapoints)
             if args.single:
                 break
             await cycle.check()

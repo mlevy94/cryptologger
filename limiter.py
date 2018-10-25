@@ -9,12 +9,13 @@ class Limiter:
         self.interval = interval
         self.limit = limit
         self.count = start
-        self.time = time.time()
+        self.time = time.monotonic()
         self.lock = asyncio.Lock()
         self.logger = logging.getLogger("Limiter({})".format(self.interval))
+        self.logger.info("Initialized! Limit: {} Start: {}".format(limit, start))
 
     async def check(self):
-        curr_time = time.time()
+        curr_time = time.monotonic()
         if (curr_time - self.time) > self.interval:
             self.time = curr_time
             self.count = 0
@@ -22,7 +23,7 @@ class Limiter:
         elif self.count >= self.limit:
             delay = self.interval - (curr_time - self.time)
             self.logger.info("Delay: {}".format(delay))
-            await asyncio.sleep(delay)
+            await asyncio.sleep(delay + 0.05)  # slight extra delay to account for inaccuracies in sleep time
             await self.check()
         else:
             self.count += 1
