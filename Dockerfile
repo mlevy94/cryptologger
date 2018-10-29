@@ -2,9 +2,9 @@ FROM python:alpine
 
 WORKDIR /logger
 
-ADD cryptologger.py /logger
+ADD *.py ./
 
-RUN chmod +x cryptologger.py
+RUN chmod +x *.py
 
 RUN pip install requests
 
