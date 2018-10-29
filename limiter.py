@@ -21,9 +21,9 @@ class Limiter:
             self.count = 0
             self.logger.debug("Reset")
         elif self.count >= self.limit:
-            delay = self.interval - (curr_time - self.time)
+            delay = round(self.interval - (curr_time - self.time) + 0.005, 2)
             self.logger.info("Delay: {}".format(delay))
-            await asyncio.sleep(delay + 0.05)  # slight extra delay to account for inaccuracies in sleep time
+            await asyncio.sleep(delay)  # slight extra delay to account for inaccuracies in sleep time
             await self.check()
         else:
             self.count += 1

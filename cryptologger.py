@@ -20,37 +20,35 @@ async def main(args):
         -Interval: {interval}
         -From Symbols: {fromsyms}
         -To Symbols: {tosyms}
-        -Exchange: {exchange}
+        -Exchanges: {exchange}
         -Data: {data}""".format(
             host=args.host, port=args.port, database=args.database,
             interval="Single" if args.single else "Historic" if args.historic else "{} Seconds".format(args.interval),
             fromsyms=args.from_symbols, tosyms=args.to_symbols,
-            exchange=args.exchange, data="Price Only" if args.simple or args.historic else "Full"
+            exchange=args.exchanges, data="Price Only" if args.simple or args.historic else "Full"
     )))
 
     crypto = CryptoCompare()
     influx = InfluxDB(args.database, args.host, args.port)
+    loop = asyncio.get_running_loop()
 
     if args.historic:
-        loop = asyncio.get_running_loop()
-
-        async def process_data(fromsym, tosym, values):
+        futures = await crypto.history_minute(args.from_symbols, args.to_symbols, exchanges=args.exchanges)
+        for future in asyncio.as_completed(futures):
+            fromsym, tosym, exchange, values = await future
             datapoints = []
             for value in values:
-                pricedata = {"FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": value["close"], "MARKET": args.exchange}
+                pricedata = {"FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": value["close"], "MARKET": exchange}
                 datapoints.append(influx.make_price_pair(pricedata, value["time"]))
-            await asyncio.ensure_future(influx.post_data(datapoints), loop=loop)
-
-        await crypto.history_minute(process_data, args.from_symbols, args.to_symbols, exchange=args.exchange)
-
+            asyncio.ensure_future(influx.post_data(datapoints), loop=loop)
     else:
         cycle = Limiter(args.interval, 0)
         while True:
             try:
                 if args.simple:
-                    results = await crypto.multi_price(args.from_symbols, args.to_symbols, args.exchange)
+                    results = await crypto.multi_price(args.from_symbols, args.to_symbols, args.exchanges[0])
                 else:
-                    results = await crypto.multi_price_full(args.from_symbols, args.to_symbols, args.exchange)
+                    results = await crypto.multi_price_full(args.from_symbols, args.to_symbols, args.exchanges[0])
             except ValueError as error:
                 results = {}
                 logger.warning("Bad Request: {}".format(error))
@@ -62,7 +60,7 @@ async def main(args):
                             continue
                         if args.simple:
                             pricedata = {
-                                "FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": pricedata, "MARKET": args.exchange
+                                "FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": pricedata, "MARKET": args.exchanges[0]
                             }
                         datapoints.append(influx.make_price_pair(pricedata))
 
@@ -70,6 +68,10 @@ async def main(args):
             if args.single:
                 break
             await cycle.check()
+
+    tasks = asyncio.all_tasks()
+    tasks.remove(asyncio.current_task())
+    await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -83,7 +85,7 @@ if __name__ == '__main__':
                         help="List of from symbols (default: BTC BCH ETH)")
     parser.add_argument("-t", "--to-symbols", type=str, nargs="*", default=["USD"],
                         help="List of to symbols (default: USD)")
-    parser.add_argument("-e", "--exchange", type=str, default=None, help="Exchange to get values from")
+    parser.add_argument("-e", "--exchanges", type=str, nargs="*", default=[None], help="Exchanges to get values from")
     parser.add_argument("-m", "--simple", action="store_true", help="Get just the price of each pairing")
     parser.add_argument("-y", "--historic", action="store_true", help="Get last 7 days of data")
     args = parser.parse_args()
