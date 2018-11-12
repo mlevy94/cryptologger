@@ -35,32 +35,36 @@ class CryptoCompare:
         return self._send_msg(self.CC_DATA_API.format("all/exchanges"))
 
     async def multi_price(self, from_currencies, to_currencies, exchange=None):
+        fsyms = ",".join(from_currencies)
+        tsyms = ",".join(to_currencies)
         payload = {
-            "fsyms": ",".join(from_currencies),
-            "tsyms": ",".join(to_currencies),
+            "fsyms": fsyms,
+            "tsyms": tsyms,
             "e": exchange,
         }
         await self.seclimiter.check()
         await self.minlimiter.check()
         await self.hourlimiter.check()
-        self.logger.info("Simple: {} -> {}".format(from_currencies, to_currencies))
+        self.logger.info("Simple: [{}] {} -> {}".format(exchange, fsyms, tsyms))
         response = await self.loop.run_in_executor(
             None, partial(self._send_msg, self.CC_DATA_API.format("pricemulti"), params=payload))
-        return response
+        return response, exchange
 
     async def multi_price_full(self, from_currencies, to_currencies, exchange=None):
+        fsyms = ",".join(from_currencies)
+        tsyms = ",".join(to_currencies)
         payload = {
-            "fsyms": ",".join(from_currencies),
-            "tsyms": ",".join(to_currencies),
+            "fsyms": fsyms,
+            "tsyms": tsyms,
             "e": exchange,
         }
         await self.seclimiter.check()
         await self.minlimiter.check()
         await self.hourlimiter.check()
-        self.logger.info("Full: {} -> {}".format(from_currencies, to_currencies))
+        self.logger.info("Full: [{}] {} -> {}".format(exchange, fsyms, tsyms))
         response = await self.loop.run_in_executor(
             None, partial(self._send_msg, self.CC_DATA_API.format("pricemultifull"), params=payload))
-        return response.get("RAW", {})
+        return response.get("RAW", {}), exchange
 
     async def history_minute(self, from_currencies, to_currencies, exchanges=None, from_time=0):
         if self.hhourlimiter is None:

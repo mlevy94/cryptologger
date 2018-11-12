@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from limiter import Limiter
 from cryptocompare import CryptoCompare
 from influxdb import InfluxDB
+from functools import partial
 import logging
 import textwrap
 import asyncio
@@ -42,29 +43,67 @@ async def main(args):
                 datapoints.append(influx.make_price_pair(pricedata, value["time"]))
             asyncio.ensure_future(influx.post_data(datapoints), loop=loop)
     else:
+        exchanges = {}
+        to_symbols = set(args.to_symbols)
+        for exchange in args.exchanges:
+            pairings = {}
+            if exchange in ["None", "CCCAGG", None]:
+                exchange = None
+                exchange_pairs = {}
+            else:
+                try:
+                    exchange_pairs = crypto.exchanges[exchange]
+                except KeyError:
+                    continue
+            for sym in args.from_symbols:
+                if exchange is None:
+                    # avoid self matches
+                    match = to_symbols.difference([sym], [])
+                else:
+                    match = exchange_pairs.get(sym, [])
+                sym_pair = tuple(to_symbols.intersection(match))
+                if sym_pair:
+                    try:
+                        pairings[sym_pair].append(sym)
+                    except KeyError:
+                        pairings[sym_pair] = [sym]
+            if pairings:
+                exchanges[exchange] = pairings
+
+        # flatten
+        messages = []
+        if args.simple:
+            func = crypto.multi_price
+        else:
+            func = crypto.multi_price_full
+        for exchange, pairs in exchanges.items():
+            for to_symbols, from_symbols in pairs.items():
+                messages.append(
+                    {"from_currencies": from_symbols, "to_currencies":to_symbols, "exchange": exchange}
+                )
         cycle = Limiter(args.interval, 0)
         while True:
-            try:
-                if args.simple:
-                    results = await crypto.multi_price(args.from_symbols, args.to_symbols, args.exchanges[0])
-                else:
-                    results = await crypto.multi_price_full(args.from_symbols, args.to_symbols, args.exchanges[0])
-            except ValueError as error:
-                results = {}
-                logger.warning("Bad Request: {}".format(error))
-            if results:
-                datapoints = []
-                for fromsym, topoints in results.items():
-                    for tosym, pricedata in topoints.items():
-                        if fromsym == tosym:
-                            continue
-                        if args.simple:
-                            pricedata = {
-                                "FROMSYMBOL": fromsym, "TOSYMBOL": tosym, "PRICE": pricedata, "MARKET": args.exchanges[0]
-                            }
-                        datapoints.append(influx.make_price_pair(pricedata))
+            datapoints = []
+            coros = list(map(lambda kargs: func(**kargs), messages))
+            for future in asyncio.as_completed(coros):
+                try:
+                    results, exchange = await future
+                except ValueError as error:
+                    logger.warning("Bad Request: {}".format(error))
+                    continue
+                if results:
+                    for fromsym, topoints in results.items():
+                        for tosym, pricedata in topoints.items():
+                            if fromsym == tosym:
+                                continue
+                            if args.simple:
+                                pricedata = {
+                                    "FROMSYMBOL": fromsym, "TOSYMBOL": tosym,
+                                    "PRICE": pricedata, "MARKET": exchange
+                                }
+                            datapoints.append(influx.make_price_pair(pricedata))
 
-                await influx.post_data(datapoints)
+            await influx.post_data(datapoints)
             if args.single:
                 break
             await cycle.check()
@@ -88,6 +127,5 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--exchanges", type=str, nargs="*", default=[None], help="Exchanges to get values from")
     parser.add_argument("-m", "--simple", action="store_true", help="Get just the price of each pairing")
     parser.add_argument("-y", "--historic", action="store_true", help="Get last 7 days of data")
-    args = parser.parse_args()
 
-    asyncio.run(main(args))
+    asyncio.run(main(parser.parse_args()))
