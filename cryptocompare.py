@@ -12,36 +12,27 @@ class CryptoCompare:
     APP_NAME = "InfluxDB Logger"
 
     def __init__(self):
-        self.logger = logging.getLogger("CryptoCompare")
-        self.limits = self.rate_limits()
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.exchanges = self.get_exchanges()
+        self.limits = self.rate_limits()
+        self.seclimiter = Limiter(1, 50, self.limits["calls_made"]["second"])
+        self.minlimiter = Limiter(60, 2000, self.limits["calls_made"]["minute"])
+        self.hourlimiter = Limiter(3600, 100000, self.limits["calls_made"]["hour"])
         self.loop = asyncio.get_event_loop()
-        self.seclimiter = None
-        self.minlimiter = None
-        self.hourlimiter = None
-        self.hseclimiter = None
-        self.hminlimiter = None
-        self.hhourlimiter = None
 
     def rate_limits(self):
         result = requests.get(self.CC_STAT_API.format("rate/limit"))
-        return result.json()
+        return result.json()["Data"]
 
-    def coinlist(self):
-        return self._send_msg(self.CC_DATA_API.format("all/coinlist"))
+    async def coinlist(self):
+        await self._check()
+        return await self.loop.run_in_executor(None, self._send_msg, self.CC_DATA_API.format("all/coinlist"))
 
     def get_exchanges(self):
         return self._send_msg(self.CC_DATA_API.format("all/exchanges"))
 
     async def multi_price(self, from_currencies, to_currencies, exchange=None):
-        if self.hourlimiter is None:
-            self.seclimiter = Limiter(1, 50, self.limits["Second"]["CallsMade"]["Price"])
-            self.minlimiter = Limiter(60, 2000, self.limits["Minute"]["CallsMade"]["Price"])
-            self.hourlimiter = Limiter(3600, 100000, self.limits["Hour"]["CallsMade"]["Price"])
-        await self.seclimiter.check()
-        await self.minlimiter.check()
-        await self.hourlimiter.check()
-
+        await self._check()
         fsyms = ",".join(from_currencies)
         tsyms = ",".join(to_currencies)
         payload = {
@@ -55,14 +46,7 @@ class CryptoCompare:
         return response, exchange
 
     async def multi_price_full(self, from_currencies, to_currencies, exchange=None):
-        if self.hourlimiter is None:
-            self.seclimiter = Limiter(1, 50, self.limits["Second"]["CallsMade"]["Price"])
-            self.minlimiter = Limiter(60, 2000, self.limits["Minute"]["CallsMade"]["Price"])
-            self.hourlimiter = Limiter(3600, 100000, self.limits["Hour"]["CallsMade"]["Price"])
-        await self.seclimiter.check()
-        await self.minlimiter.check()
-        await self.hourlimiter.check()
-
+        await self._check()
         fsyms = ",".join(from_currencies)
         tsyms = ",".join(to_currencies)
         payload = {
@@ -76,11 +60,6 @@ class CryptoCompare:
         return response.get("RAW", {}), exchange
 
     async def history_minute(self, from_currencies, to_currencies, exchanges=None, from_time=0):
-        if self.hhourlimiter is None:
-            self.hseclimiter = Limiter(1, 15, self.limits["Second"]["CallsMade"]["Histo"])
-            self.hminlimiter = Limiter(60, 300, self.limits["Minute"]["CallsMade"]["Histo"])
-            self.hhourlimiter = Limiter(3600, 8000, self.limits["Hour"]["CallsMade"]["Histo"])
-
         futures = []
         for exchange in exchanges:
             if exchange in ["None", "CCCAGG", None]:
@@ -108,9 +87,7 @@ class CryptoCompare:
         to_time = None
         try:
             while True:
-                await self.hseclimiter.check()
-                await self.hminlimiter.check()
-                await self.hhourlimiter.check()
+                await self._check()
                 payload = {
                     "fsym": from_currency,
                     "tsym": to_currency,
@@ -119,7 +96,7 @@ class CryptoCompare:
                     "limit": limit,
                     "toTs": to_time,
                 }
-                self.logger.info("History: [{}] {} -> {} ({})".format(exchange, from_currency, to_currency, to_time))
+                self.logger.info("Historic: [{}] {} -> {} ({})".format(exchange, from_currency, to_currency, to_time))
                 response = await self.loop.run_in_executor(
                     None, partial(self._send_msg, self.CC_DATA_API.format("histominute"), params=payload))
                 run = response.get("Data")
@@ -146,3 +123,8 @@ class CryptoCompare:
         if response.get("Response") == "Error":
             raise ValueError(response["Message"])
         return response
+
+    async def _check(self):
+        await self.seclimiter.check()
+        await self.minlimiter.check()
+        await self.hourlimiter.check()
