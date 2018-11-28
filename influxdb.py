@@ -60,5 +60,11 @@ class InfluxDB:
                 params={"db": self.database}
             )
             status.raise_for_status()
-        except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
+        except (requests.exceptions.ConnectionError,):
             self.logger.warning("Failed Sending Data")
+        except requests.exceptions.RequestException:
+            try:
+                text = status.text
+            except (AttributeError, NameError):
+                text = ""
+            self.logger.warning("Failed Sending Data: {}".format(text))

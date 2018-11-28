@@ -11,6 +11,46 @@ class CryptoCompare:
     CC_STAT_API = "https://min-api.cryptocompare.com/stats/{}"
     APP_NAME = "InfluxDB Logger"
 
+    TYPE_MAP = {
+        "TYPE": str,
+        "MARKET": str,
+        "FROMSYMBOL": str,
+        "TOSYMBOL": str,
+        "FLAGS": str,
+        "PRICE": float,
+        "LASTUPDATE": int,
+        "LASTVOLUME": float,
+        "LASTVOLUMETO": float,
+        "LASTTRADEID": str,
+        "VOLUMEDAY": float,
+        "VOLUMEDAYTO": float,
+        "VOLUME24HOUR": float,
+        "VOLUME24HOURTO": float,
+        "OPENDAY": float,
+        "HIGHDAY": float,
+        "LOWDAY": float,
+        "OPEN24HOUR": float,
+        "HIGH24HOUR": float,
+        "LOW24HOUR": float,
+        "LASTMARKET": str,
+        "CHANGE24HOUR": float,
+        "CHANGEPCT24HOUR": float,
+        "CHANGEDAY": float,
+        "CHANGEPCTDAY": float,
+        "SUPPLY": float,
+        "MKTCAP": float,
+        "TOTALVOLUME24H": float,
+        "TOTALVOLUME24HTO": float,
+
+        "time": int,
+        "close": float,
+        "high": float,
+        "low": float,
+        "open": float,
+        "volumefrom": float,
+        "volumeto": float,
+    }
+
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.exchanges = self.get_exchanges()
@@ -57,7 +97,19 @@ class CryptoCompare:
         self.logger.info("Full: [{}] {} -> {}".format(exchange, fsyms, tsyms))
         response = await self.loop.run_in_executor(
             None, partial(self._send_msg, self.CC_DATA_API.format("pricemultifull"), params=payload))
-        return response.get("RAW", {}), exchange
+        ret = response.get("RAW", {})
+        for from_currency, from_data in ret.items():
+            for to_currency, to_data in from_data.items():
+                currency_data = {}
+                for key, val in to_data.items():
+                    try:
+                        val_type = self.TYPE_MAP[key]
+                    except KeyError:
+                        self.logger.warning("Missing Key: {}".format(key))
+                        val_type = str
+                    currency_data[key] = val_type(val)
+                ret[from_currency][to_currency] = currency_data
+        return ret, exchange
 
     async def history_minute(self, from_currencies, to_currencies, exchanges=None, from_time=0):
         futures = []
@@ -83,7 +135,7 @@ class CryptoCompare:
         return futures
 
     async def _history_minute(self, from_currency, to_currency, exchange=None, aggregate=None, limit=None, from_time=0):
-        ret_data = []
+        data = []
         to_time = None
         try:
             while True:
@@ -102,12 +154,23 @@ class CryptoCompare:
                 run = response.get("Data")
                 if not run:
                     continue
-                ret_data = run + ret_data
-                to_time = ret_data[0]["time"]
+                data = run + data
+                to_time = data[0]["time"]
                 if len(run) < 2000 or to_time < from_time:
                     break
         except ValueError:
             pass
+        ret_data = []
+        for datapoint in data:
+            ret_datapoint = {}
+            for key, val in datapoint.items():
+                try:
+                    val_type = self.TYPE_MAP[key]
+                except KeyError:
+                    self.logger.warning("Missing Key: {}".format(key))
+                    val_type = str
+                ret_datapoint[key] = val_type(val)
+            ret_data.append(ret_datapoint)
         return from_currency, to_currency, exchange, ret_data
 
     def _send_msg(self, url, params=None):
