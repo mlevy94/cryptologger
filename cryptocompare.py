@@ -33,6 +33,11 @@ class CryptoCompare:
         "HIGH24HOUR": float,
         "LOW24HOUR": float,
         "LASTMARKET": str,
+        "VOLUMEHOUR": float,
+        "VOLUMEHOURTO": float,
+        "OPENHOUR": float,
+        "HIGHHOUR": float,
+        "LOWHOUR": float,
         "CHANGE24HOUR": float,
         "CHANGEPCT24HOUR": float,
         "CHANGEDAY": float,
@@ -41,6 +46,7 @@ class CryptoCompare:
         "MKTCAP": float,
         "TOTALVOLUME24H": float,
         "TOTALVOLUME24HTO": float,
+        "IMAGEURL": str,
 
         "time": int,
         "close": float,
@@ -51,8 +57,9 @@ class CryptoCompare:
         "volumeto": float,
     }
 
-    def __init__(self):
+    def __init__(self, key):
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.key = key
         self.exchanges = self.get_exchanges()
         self.limits = self.rate_limits()
         self.seclimiter = Limiter(1, 50, self.limits["calls_made"]["second"])
@@ -105,6 +112,7 @@ class CryptoCompare:
                     try:
                         val_type = self.TYPE_MAP[key]
                     except KeyError:
+                        import pdb; pdb.set_trace()
                         self.logger.warning("Missing Key: {}".format(key))
                         val_type = str
                     currency_data[key] = val_type(val)
@@ -178,7 +186,7 @@ class CryptoCompare:
             params = {}
         params["extraParams"] = self.APP_NAME
         try:
-            result = requests.get(url, params=params)
+            result = requests.get(url, params=params, headers={'authorization': "Apikey {}".format(self.key)})
             response = result.json()
         except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
                 response = {}

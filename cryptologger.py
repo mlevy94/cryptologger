@@ -10,9 +10,9 @@ import asyncio
 
 class CryptoLogger:
 
-    def __init__(self, database, host="localhost", port=8086, *args, **kwargs):
+    def __init__(self, database, api_key, host="localhost", port=8086, *args, **kwargs):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.crypto = CryptoCompare()
+        self.crypto = CryptoCompare(api_key)
         self.influx = InfluxDB(database=database, host=host, port=port)
         self.loop = asyncio.get_event_loop()
 
@@ -117,7 +117,7 @@ async def main(args):
             exchange=args.exchanges, data="Price Only" if args.simple else "Full"
     )))
 
-    cryptologger = CryptoLogger(args.database, args.host, args.port)
+    cryptologger = CryptoLogger(args.database, args.key, args.host, args.port)
 
     if args.historic:
         asyncio.ensure_future(cryptologger.get_minute_history(args.from_symbols, args.to_symbols, args.exchanges))
@@ -130,6 +130,7 @@ async def main(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
+    parser.add_argument("key", help="CryptoCompare API Key")
     parser.add_argument("-s", "--single", action="store_true", help="Single run only")
     parser.add_argument("-i", "--interval", type=float, default=10.0,
                         help="Interval between queries in seconds (default: 10)")
