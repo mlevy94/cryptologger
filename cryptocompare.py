@@ -62,9 +62,12 @@ class CryptoCompare:
         self.key = key
         self.exchanges = self.get_exchanges()
         self.limits = self.rate_limits()
-        self.seclimiter = Limiter(1, 50, self.limits["calls_made"]["second"])
-        self.minlimiter = Limiter(60, 2000, self.limits["calls_made"]["minute"])
-        self.hourlimiter = Limiter(3600, 100000, self.limits["calls_made"]["hour"])
+        second_made = self.limits["calls_made"]["second"]
+        minute_made = self.limits["calls_made"]["minute"]
+        hour_made = self.limits["calls_made"]["hour"]
+        self.seclimiter = Limiter(1, self.limits["calls_left"]["second"] + second_made, second_made)
+        self.minlimiter = Limiter(60, self.limits["calls_left"]["minute"] + minute_made, minute_made)
+        self.hourlimiter = Limiter(3600, self.limits["calls_left"]["hour"] + hour_made, hour_made)
         self.loop = asyncio.get_event_loop()
 
     def rate_limits(self):
