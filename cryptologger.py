@@ -130,7 +130,7 @@ async def main(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("key", help="CryptoCompare API Key")
+    parser.add_argument("-k", "--key", help="CryptoCompare API Key")
     parser.add_argument("-s", "--single", action="store_true", help="Single run only")
     parser.add_argument("-i", "--interval", type=float, default=10.0,
                         help="Interval between queries in seconds (default: 10)")
