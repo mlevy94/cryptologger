@@ -38,6 +38,8 @@ class CryptoCompare:
         "OPENHOUR": float,
         "HIGHHOUR": float,
         "LOWHOUR": float,
+        "TOPTIERVOLUME24HOUR": float,
+        "TOPTIERVOLUME24HOURTO": float,
         "CHANGE24HOUR": float,
         "CHANGEPCT24HOUR": float,
         "CHANGEDAY": float,
@@ -46,6 +48,8 @@ class CryptoCompare:
         "MKTCAP": float,
         "TOTALVOLUME24H": float,
         "TOTALVOLUME24HTO": float,
+        "TOTALTOPTIERVOLUME24H": float,
+        "TOTALTOPTIERVOLUME24HTO": float,
         "IMAGEURL": str,
 
         "time": int,
@@ -115,7 +119,6 @@ class CryptoCompare:
                     try:
                         val_type = self.TYPE_MAP[key]
                     except KeyError:
-                        import pdb; pdb.set_trace()
                         self.logger.warning("Missing Key: {}".format(key))
                         val_type = str
                     currency_data[key] = val_type(val)
